@@ -1,0 +1,23 @@
+/* color palette from <https://github.com/vuejs/theme> */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+*,
+*::before,
+*::after {
+  @apply box-border m-0 p-0 font-normal;
+}
+
+html {
+  @apply h-svh;
+}
+
+body {
+  @apply bg-black text-white max-w-5xl mx-auto px-6;
+}
+
+a {
+  @apply underline decoration-1 underline-offset-2;
+}
