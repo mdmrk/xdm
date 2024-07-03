@@ -5,13 +5,14 @@ BIN_PATH := bin
 SRC_PATH := .
 
 TARGET_SERVER_NAME := xdmediad
-LOGGER_SERVER_NAME := xdmediad
+LOGGER_SERVER_NAME := loggerd
 
 TARGET_SERVER := $(BIN_PATH)/$(TARGET_SERVER_NAME)
 LOGGER_SERVER := $(BIN_PATH)/$(LOGGER_SERVER_NAME)
 
 OBJ_SERVER := $(SRC_PATH)/server/*.go
 OBJ_LOGGER := $(SRC_PATH)/logger/*.go
+OBJ_DECRYP := $(SRC_PATH)/logger/decrypt/decrypt.go
 
 CLEAN_LIST := $(BIN_PATH)
 
@@ -39,6 +40,10 @@ logger: $(OBJ_LOGGER)
 .PHONY: logger_run
 logger_run: logger
 	@$(LOGGER_SERVER)
+
+.PHONY: decrypt
+decrypt: $(OBJ_DECRYP)
+	go run logger/decrypt/decrypt.go $(logfile)
 
 .PHONY: clean
 clean:

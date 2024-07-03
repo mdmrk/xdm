@@ -79,7 +79,7 @@ func signupHandler(w http.ResponseWriter, r *http.Request) {
                        VALUES ($1, $2, $3, $4, $5)`,
 		u.Alias, u.Username, hashedPassword, u.Salt, u.Token)
 	if err != nil {
-		http.Error(w, "Failed to store user", http.StatusInternalServerError)
+		http.Error(w, "Failed to insert user", http.StatusInternalServerError)
 		Error("Failed to insert user %s: %v", u.Username, err)
 		return
 	}

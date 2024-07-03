@@ -1,12 +1,12 @@
 services:
   db:
     container_name: db
-    image: postgres
+    image: perconalab/pg_tde
     restart: always
     environment:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: 123
-      POSTGRES_DB: xdmedia
+      POSTGRES_DB: xdm
     ports:
       - "5432:5432"
     volumes:

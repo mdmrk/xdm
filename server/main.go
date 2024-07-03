@@ -57,7 +57,7 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 			}
-			return []byte("your-256-bit-secret"), nil
+			return []byte(JWT_SECRET_KEY), nil
 		}
 
 		claims := &Claims{}
@@ -155,7 +155,7 @@ func run() error {
 		TLSNextProto: make(map[string]func(*http.Server, *tls.Conn, http.Handler), 0),
 	}
 	Info("listening on addr %s", addr)
-	Fatal(srv.ListenAndServeTLS("crypto/localhost.pem", "crypto/localhost-key.pem").Error())
+	Fatal(srv.ListenAndServeTLS("crypto/server.crt", "crypto/server.key").Error())
 	return nil
 }
 

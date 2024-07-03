@@ -8,11 +8,12 @@ const DBHOST = "localhost"
 const DBPORT = 5432
 const DBUSER = "admin"
 const DBPASS = "123"
-const DBNAME = "xdmedia"
+const DBNAME = "xdm"
 
 const BASE_URL = "https://localhost"
 const SERVER_PORT = 5555
 const LOGGER_PORT = 5556
+const JWT_SECRET_KEY = "5wa88mNb8cwWBTlYWit4vBoXRDmLtbWo3YeV0d0LExs="
 const MIN_ALIAS_LEN = 3
 const MAX_ALIAS_LEN = 32
 const MIN_USERNAME_LEN = 3

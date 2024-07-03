@@ -80,9 +80,35 @@ func getPostHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func getPostsHandler(w http.ResponseWriter, r *http.Request) {
-	query := `SELECT id, user_id, body, likes, created_at FROM posts ORDER BY created_at DESC LIMIT 100`
+	limit := r.URL.Query().Get("limit")
+	if limit == "" {
+		limit = "100"
+	}
 
-	rows, err := db.Query(query)
+	offset := r.URL.Query().Get("offset")
+	if offset == "" {
+		offset = "0"
+	}
+
+	orderBy := r.URL.Query().Get("order_by")
+	if orderBy == "" {
+		orderBy = "created_at"
+	}
+
+	query := `SELECT id, user_id, body, likes, created_at FROM posts`
+
+	switch orderBy {
+	case "user":
+		query += ` ORDER BY user_id`
+	case "likes":
+		query += ` ORDER BY likes DESC`
+	default:
+		query += ` ORDER BY created_at DESC`
+	}
+
+	query += ` LIMIT $1 OFFSET $2`
+
+	rows, err := db.Query(query, limit, offset)
 	if err != nil {
 		http.Error(w, "Query error", http.StatusInternalServerError)
 		return
@@ -98,8 +124,10 @@ func getPostsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		posts = append(posts, p)
 	}
+
 	if err = rows.Err(); err != nil {
 		return
 	}
+
 	encode(w, r, http.StatusOK, posts)
 }
