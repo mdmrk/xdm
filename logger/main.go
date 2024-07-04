@@ -1,61 +1,41 @@
 package main
 
 import (
-	"crypto/aes"
-	"crypto/cipher"
-	"crypto/rand"
-	"encoding/base64"
 	"fmt"
 	"io"
 	"log"
 	"net"
 	"os"
+	"path"
 	"path/filepath"
 	"time"
 )
 
 const (
-	addr = "localhost:5556"
+	addr   = "localhost:5556"
+	logDir = "logs/"
+	aesKey = "MXi5jg4NhT1UZvtJFJHOOK3WWVHrggU="
 )
 
 var file *os.File
 
-func encrypt(plaintext string, key []byte) (string, error) {
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return "", err
-	}
-	ciphertext := make([]byte, aes.BlockSize+len(plaintext))
-	iv := ciphertext[:aes.BlockSize]
-	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
-		return "", err
-	}
-	stream := cipher.NewCTR(block, iv)
-	stream.XORKeyStream(ciphertext[aes.BlockSize:], []byte(plaintext))
-	return base64.StdEncoding.EncodeToString(ciphertext), nil
-}
-
-func handleConnection(conn net.Conn, key []byte) {
+func handleConnection(conn net.Conn) {
 	defer conn.Close()
 	buf, err := io.ReadAll(conn)
 	if err != nil {
 		log.Println("Failed to read from connection:", err)
 		return
 	}
-	encryptedLog, err := encrypt(string(buf), key)
-	if err != nil {
-		log.Println("Failed to encrypt log:", err)
-		return
-	}
-	if _, err := file.WriteString(encryptedLog + "\n"); err != nil {
+
+	str := string(buf)
+	if _, err := file.WriteString(str + "\n"); err != nil {
 		log.Println("Failed to write to log file:", err)
 	}
 }
 
 func main() {
-	key := []byte(os.Getenv("LOG_PASSWORD"))
-	if len(key) == 0 {
-		log.Fatalf("LOG_PASSWORD variable not defined")
+	if err := os.MkdirAll(logDir, os.ModePerm); err != nil {
+		log.Fatalf("Failed to create log directory: %v", err)
 	}
 
 	listener, err := net.Listen("tcp", addr)
@@ -63,27 +43,16 @@ func main() {
 		log.Fatalf("Failed to set up listener: %v", err)
 	}
 	defer listener.Close()
-
 	ex, err := os.Executable()
 	if err != nil {
-		log.Fatalf("Failed to get executable path: %v", err)
+		panic(err)
 	}
+	var logfile_dir = path.Join(filepath.Dir(ex), "logs")
+	os.Mkdir(logfile_dir, 0755)
 
-	logfileDir := filepath.Join(filepath.Dir(ex), "logs")
-	err = os.MkdirAll(logfileDir, os.ModePerm)
-	if err != nil {
-		log.Fatalf("Failed to create log directory: %v", err)
-	}
-
-	logfilePath := filepath.Join(logfileDir, fmt.Sprintf("%d.log", time.Now().UnixMilli()))
-	file, err = os.OpenFile(logfilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
-	if err != nil {
-		log.Fatalf("Failed to open log file: %v", err)
-	}
+	file, err = os.OpenFile(path.Join(logfile_dir, fmt.Sprintf("%d.txt", time.Now().UnixMilli())), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
 	defer file.Close()
-
 	log.Printf("Logger server listening on %s", addr)
-	log.Printf("Log file: %s", logfilePath)
 
 	for {
 		conn, err := listener.Accept()
@@ -91,7 +60,6 @@ func main() {
 			log.Println("Failed to accept connection:", err)
 			continue
 		}
-		go handleConnection(conn, key)
+		go handleConnection(conn)
 	}
 }
-
