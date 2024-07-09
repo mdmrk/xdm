@@ -1,5 +1,7 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+CREATE EXTENSION IF NOT EXISTS pg_tde;
+SELECT pg_tde_add_key_provider_file('file','/tmp/pgkeyring');
+SELECT pg_tde_set_principal_key('my-principal-key','file');
 CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     alias VARCHAR(32) NOT NULL,
