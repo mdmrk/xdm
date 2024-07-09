@@ -1,10 +1,16 @@
 package main
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/base64"
 	"errors"
 	"log"
 	"net/http"
+
+	"golang.org/x/crypto/pbkdf2"
 )
 
 func signinValidator(u SigninRequest) error {
@@ -47,9 +53,35 @@ func signinVerifyPassword(w http.ResponseWriter, u SigninRequest) error {
 	return nil
 }
 
+func decryptKey(encryptedKey []byte, password string) ([]byte, error) {
+	salt := encryptedKey[:16]
+	nonce := encryptedKey[16:28]
+	ciphertext := encryptedKey[28:]
+
+	derivedKey := pbkdf2.Key([]byte(password), salt, 100000, 32, sha256.New)
+
+	block, err := aes.NewCipher(derivedKey)
+	if err != nil {
+		return nil, err
+	}
+	aesgcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, err
+	}
+	plaintext, err := aesgcm.Open(nil, nonce, ciphertext, nil)
+	if err != nil {
+		return nil, err
+	}
+	return plaintext, nil
+}
+
+
 func signinHandler(w http.ResponseWriter, r *http.Request) {
 	var signinReq SigninRequest
 	var u *User
+	var base64EncryptedPrivateKey string
+	var encryptedPrivateKey []byte
+	var publicKeyPEM string
 
 	signinReq, err := decode[SigninRequest](r)
 	if err != nil {
@@ -80,11 +112,24 @@ func signinHandler(w http.ResponseWriter, r *http.Request) {
 		Error(err.Error())
 	}
 
+	err = db.QueryRow("SELECT private_key, public_key FROM users WHERE username = $1", signinReq.Username).Scan(&base64EncryptedPrivateKey, &publicKeyPEM)
+	if err != nil {
+		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+		return
+	}
+	encryptedPrivateKey, err = base64.StdEncoding.DecodeString(base64EncryptedPrivateKey)
+	privateKeyPEM, err := decryptKey(encryptedPrivateKey, signinReq.Password)
+	if err != nil {
+		http.Error(w, "Failed to decrypt private key", http.StatusInternalServerError)
+		Error("Failed to decrypt private key: %v", err)
+		return
+	}
+
 	token, err := userGenerateJWT(u.Id.String())
 	if err != nil {
 		Error(err.Error())
 		return
 	}
-	encode(w, r, http.StatusOK, map[string]string{"token": token, "userId": u.Id.String()})
+	encode(w, r, http.StatusOK, map[string]string{"token": token, "userId": u.Id.String(), "publicKey": publicKeyPEM, "privateKey": string(privateKeyPEM)})
 	Info("user '%s' logged in", u.Username)
 }

@@ -1,13 +1,20 @@
 package main
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
 	"crypto/rand"
+	"crypto/sha256"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
+	"io"
 	"net/http"
 
 	"golang.org/x/crypto/argon2"
+	"golang.org/x/crypto/pbkdf2"
 )
 
 func generateSalt(size int) ([]byte, error) {
@@ -50,6 +57,30 @@ func signupValidator(u User) error {
 	return nil
 }
 
+func encryptKey(key []byte, password string, salt []byte) ([]byte, error) {
+	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
+		return nil, err
+	}
+
+	derivedKey := pbkdf2.Key([]byte(password), salt, 100000, 32, sha256.New)
+
+	block, err := aes.NewCipher(derivedKey)
+	if err != nil {
+		return nil, err
+	}
+	nonce := make([]byte, 12)
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		return nil, err
+	}
+	aesgcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, err
+	}
+	ciphertext := aesgcm.Seal(nil, nonce, key, nil)
+	return append(salt, append(nonce, ciphertext...)...), nil
+}
+
+
 func signupHandler(w http.ResponseWriter, r *http.Request) {
 	var u User
 
@@ -73,11 +104,35 @@ func signupHandler(w http.ResponseWriter, r *http.Request) {
 
 	u.Salt = salt
 
+	// Generate a new key pair
+	privateKey, publicKey, err := generateKeyPair(2048)
+	if err != nil {
+		http.Error(w, "Failed to generate key pair", http.StatusInternalServerError)
+		Error("Failed to generate key pair: %v", err)
+		return
+	}
+
+	privateKeyPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(privateKey),
+	})
+	publicKeyPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "PUBLIC KEY",
+		Bytes: x509.MarshalPKCS1PublicKey(publicKey),
+	})
+
+	encryptedPrivateKey, err := encryptKey(privateKeyPEM, u.Password, u.Salt)
+	if err != nil {
+		http.Error(w, "Failed to encrypt private key", http.StatusInternalServerError)
+		Error("Failed to encrypt private key: %v", err)
+		return
+	}
+	base64EncryptedPrivateKey := base64.StdEncoding.EncodeToString(encryptedPrivateKey)
 	hashedPassword := hashPassword(u.Password, salt)
 
-	_, err = db.Exec(`INSERT INTO users (alias, username, password, salt, token)
-                       VALUES ($1, $2, $3, $4, $5)`,
-		u.Alias, u.Username, hashedPassword, u.Salt, u.Token)
+	_, err = db.Exec(`INSERT INTO users (alias, username, password, salt, private_key, public_key)
+                       VALUES ($1, $2, $3, $4, $5, $6)`,
+		u.Alias, u.Username, hashedPassword, u.Salt, base64EncryptedPrivateKey, publicKeyPEM)
 	if err != nil {
 		http.Error(w, "Failed to insert user", http.StatusInternalServerError)
 		Error("Failed to insert user %s: %v", u.Username, err)

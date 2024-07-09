@@ -13,13 +13,14 @@ type Claims struct {
 }
 
 type User struct {
-	Id       uuid.UUID
-	Alias    string
-	Username string
-	Password string
-	Salt     []byte
-	Token    []byte
-	Seen     time.Time
+	Id        uuid.UUID
+	Alias     string
+	Username  string
+	Password  string
+	Salt      []byte
+	Token     []byte
+	Seen      time.Time
+	PublicKey string
 }
 
 type Post struct {
@@ -53,8 +54,13 @@ type MessageRequest struct {
 }
 
 type Message struct {
-	RecipientID string `json:"recipient_id"`
-	SenderID    int    `json:"sender_id"`
-	Content     string `json:"content"`
-	Timestamp   string `json:"timestamp"`
+	Type             string            `json:"type"`
+	Sender           string            `json:"sender"`
+	Alias            string            `json:"alias,omitempty"`
+	Recipient        string            `json:"recipient"`
+	PublicKey        string            `json:"publicKey,omitempty"`
+	Content          string            `json:"content,omitempty"`
+	EncryptedContent string            `json:"encryptedContent,omitempty"`
+	Signature        string            `json:"signature,omitempty"`
+	AllPublicKeys    map[string]string `json:"allPublicKeys,omitempty"`
 }

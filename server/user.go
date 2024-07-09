@@ -20,7 +20,7 @@ func userGenerateJWT(userID string) (string, error) {
 		"exp":     time.Now().Add(time.Hour * 24).Unix(),
 	})
 
-	tokenString, err := token.SignedString([]byte("your-256-bit-secret"))
+	tokenString, err := token.SignedString([]byte(JWT_SECRET_KEY))
 	return tokenString, err
 }
 
@@ -43,12 +43,61 @@ func getUserHandler(w http.ResponseWriter, r *http.Request) {
 	var user User
 	userID := r.PathValue("user_id")
 
-	query := `SELECT id, alias, username, seen FROM users WHERE id=$1`
-	err := db.QueryRow(query, userID).Scan(&user.Id, &user.Alias, &user.Username, &user.Seen)
+	query := `SELECT id, alias, username, seen, public_key FROM users WHERE id=$1`
+	err := db.QueryRow(query, userID).Scan(&user.Id, &user.Alias, &user.Username, &user.Seen, &user.PublicKey)
 	if err != nil {
 		Error(err.Error())
 		return
 	}
+	encode(w, r, http.StatusOK, user)
+}
+
+func getUsersHandler(w http.ResponseWriter, r *http.Request) {
+	query := `SELECT id, alias, username, seen FROM users`
+	rows, err := db.Query(query)
+	if err != nil {
+		http.Error(w, "Failed to retrieve users", http.StatusInternalServerError)
+		Error("Failed to retrieve users: %v", err)
+		return
+	}
+	defer rows.Close()
+
+	var users []User
+	for rows.Next() {
+		var user User
+		if err := rows.Scan(&user.Id, &user.Alias, &user.Username, &user.Seen); err != nil {
+			http.Error(w, "Failed to scan user", http.StatusInternalServerError)
+			Error("Failed to scan user: %v", err)
+			return
+		}
+		users = append(users, user)
+	}
+
+	if err = rows.Err(); err != nil {
+		http.Error(w, "Error retrieving users", http.StatusInternalServerError)
+		Error("Error retrieving users: %v", err)
+		return
+	}
+
+	encode(w, r, http.StatusOK, users)
+}
+
+func userMeHandler(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value("user_id").(string)
+
+	var user User
+	query := `SELECT id, alias, username, seen FROM users WHERE id=$1`
+	err := db.QueryRow(query, userID).Scan(&user.Id, &user.Alias, &user.Username, &user.Seen)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, "User not found", http.StatusNotFound)
+		} else {
+			http.Error(w, "Failed to retrieve user", http.StatusInternalServerError)
+			Error("Failed to retrieve user: %v", err)
+		}
+		return
+	}
+
 	encode(w, r, http.StatusOK, user)
 }
 

@@ -53,20 +53,27 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		keyFunc := func(token *jwt.Token) (interface{}, error) {
+		token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 			}
 			return []byte(JWT_SECRET_KEY), nil
-		}
-
-		claims := &Claims{}
-		token, err := jwt.ParseWithClaims(tokenString, claims, keyFunc)
+		})
 
 		if err != nil || !token.Valid {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusUnauthorized)
+			}
 			return
 		}
+
+		claims, ok := token.Claims.(*Claims)
+		if !ok {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
 		ctx := context.WithValue(r.Context(), "user_id", claims.UserID)
 		next(w, r.WithContext(ctx))
 	}
@@ -75,6 +82,8 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 func addRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /signup", signupHandler)
 	mux.HandleFunc("POST /signin", signinHandler)
+	mux.HandleFunc("GET /users/me", authMiddleware(userMeHandler))
+	mux.HandleFunc("GET /users", getUsersHandler)
 	mux.HandleFunc("POST /users/{user_id}/follow", authMiddleware(userFollowHandler))
 	mux.HandleFunc("DELETE /users/{user_id}/follow", authMiddleware(userUnfollowHandler))
 	mux.HandleFunc("POST /posts", authMiddleware(createPostHandler))
@@ -84,8 +93,7 @@ func addRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /posts/{post_id}/like", authMiddleware(likePostHandler))
 	mux.HandleFunc("DELETE /posts/{post_id}/like", authMiddleware(deleteLikePostHandler))
 	mux.HandleFunc("GET /users/{user_id}/like", authMiddleware(userLikesHandler))
-	mux.HandleFunc("POST /users/{user_id}/chat", authMiddleware(sendMessageHandler))
-	mux.HandleFunc("GET /users/{user_id}/chat", authMiddleware(retrieveMessagesHandler))
+	mux.HandleFunc("GET /ws", handleWebSocket)
 }
 
 func connectDB() (*sql.DB, error) {
